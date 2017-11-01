@@ -1,8 +1,15 @@
 # EMongo -- A Mongo Driver for Emacs
 
 > An elisp driver for Mongo, and Emacs minor mode for working with json documents, commands, and
-> queries.
+> queries. Additionally it can take queries or documents from a buffer, and insert results back into
+> the buffer.
 >
+
+## Examples
+
+See [examples.txt](./examples.txt) for a walk through example, and
+[examples-after.txt](examples-after.txt) for what it looks like after running the example.
+
 
 ## Warnings
 
@@ -66,8 +73,3 @@ Add to your `~/.emacs`:
     (setq blib (concat (getenv "MONGO_MODE_HOME") "/lib/lib/libbson-1.0.dylib"))
     (setq hlib (concat (getenv "MONGO_MODE_HOME") "/mongo-mode/emongo-glue.so"))
     (require 'mongo)
-
-## Examples
-
-See [examples.txt](./examples.txt)
-

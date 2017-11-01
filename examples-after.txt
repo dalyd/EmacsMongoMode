@@ -1,0 +1,66 @@
+# Enable mongo mode with M-x mongo-mode
+# Perform M-x mongo-login to get started. It will prompt for a
+# URL. Hit enter for default mongodb://localhost:27017 or enter a
+# conneciton string.
+
+# Then M-x mongo-ping to check the connection. The result of the ping
+#  operation will show up in the minibuffer.
+
+# To perform a query, select the region with the query and do M-x
+# mongo-find-region. Try it on the next line. The results will be
+# inserted into the document at point.
+{}
+{ "_id" : { "$oid" : "59f9f5f6f9b2131a8d0fbef6" }, "testing" : true }
+{ "_id" : { "$oid" : "59f9f614f9b2131a8d0fbef7" }, "bulk" : "op" }
+{ "_id" : { "$oid" : "59f9f615f9b2131a8d0fbef8" }, "bulk" : "op" }
+{ "_id" : { "$oid" : "59f9f6b9f9b2131a8d0fbef9" }, "bulk" : "op" }
+{ "_id" : { "$oid" : "59f9f70cf9b2131a8d0fbefa" }, "bulk" : "op" }
+{ "_id" : { "$oid" : "59f9f733f9b2131a8d0fbefb" }, "bulk" : "op" }
+{ "_id" : { "$oid" : "59f9f7b4f9b2131a8d0fbefc" }, "bulk" : "op" }
+{ "_id" : { "$oid" : "59f9f806f9b2131a8d0fbefd" }, "index" : 1, "test" : "foo" }
+{ "_id" : { "$oid" : "59f9fb49f9b2132a70380da2" }, "index" : 1, "test" : "foo" }
+{ "_id" : { "$oid" : "59f9fb50f9b2132a70380da3" }, "index" : 1, "test" : "foo" }
+{ "_id" : { "$oid" : "59fa0ec8f9b21336b81a53d2" }, "index" : 1, "test" : "foo" }
+{ "_id" : { "$oid" : "59fa0ed2f9b21336b81a53d3" }, "index" : 1, "test" : "foo" }
+{ "_id" : { "$oid" : "59fa0edef9b21336b81a53d4" }, "index" : 1, "test" : "foo" }
+{ "_id" : { "$oid" : "59fa0fe3f9b21336b81a53d6" }, "index" : 1, "test" : "foo" }
+
+
+# Another sample query.
+{"bulk": "op"}
+
+{ "_id" : { "$oid" : "59f9f614f9b2131a8d0fbef7" }, "bulk" : "op" }
+{ "_id" : { "$oid" : "59f9f615f9b2131a8d0fbef8" }, "bulk" : "op" }
+{ "_id" : { "$oid" : "59f9f6b9f9b2131a8d0fbef9" }, "bulk" : "op" }
+{ "_id" : { "$oid" : "59f9f70cf9b2131a8d0fbefa" }, "bulk" : "op" }
+{ "_id" : { "$oid" : "59f9f733f9b2131a8d0fbefb" }, "bulk" : "op" }
+{ "_id" : { "$oid" : "59f9f7b4f9b2131a8d0fbefc" }, "bulk" : "op" }
+
+# To insert a document, select the document and do M-x
+#  mongo-insert-region
+{"index": 1,
+ "test": "foo"
+}
+
+# You can also execute arbitrary aggregation pipelines
+{"pipeline": []}
+{ "_id" : { "$oid" : "59f9f5f6f9b2131a8d0fbef6" }, "testing" : true }
+{ "_id" : { "$oid" : "59f9f614f9b2131a8d0fbef7" }, "bulk" : "op" }
+{ "_id" : { "$oid" : "59f9f615f9b2131a8d0fbef8" }, "bulk" : "op" }
+{ "_id" : { "$oid" : "59f9f6b9f9b2131a8d0fbef9" }, "bulk" : "op" }
+{ "_id" : { "$oid" : "59f9f70cf9b2131a8d0fbefa" }, "bulk" : "op" }
+{ "_id" : { "$oid" : "59f9f733f9b2131a8d0fbefb" }, "bulk" : "op" }
+{ "_id" : { "$oid" : "59f9f7b4f9b2131a8d0fbefc" }, "bulk" : "op" }
+{ "_id" : { "$oid" : "59f9f806f9b2131a8d0fbefd" }, "index" : 1, "test" : "foo" }
+{ "_id" : { "$oid" : "59f9fb49f9b2132a70380da2" }, "index" : 1, "test" : "foo" }
+{ "_id" : { "$oid" : "59f9fb50f9b2132a70380da3" }, "index" : 1, "test" : "foo" }
+{ "_id" : { "$oid" : "59fa0ec8f9b21336b81a53d2" }, "index" : 1, "test" : "foo" }
+{ "_id" : { "$oid" : "59fa0ed2f9b21336b81a53d3" }, "index" : 1, "test" : "foo" }
+{ "_id" : { "$oid" : "59fa0edef9b21336b81a53d4" }, "index" : 1, "test" : "foo" }
+{ "_id" : { "$oid" : "59fa0fe3f9b21336b81a53d6" }, "index" : 1, "test" : "foo" }
+{ "_id" : { "$oid" : "59fa1632f9b21336b81a53d9" }, "index" : 1, "test" : "foo" }
+
+
+{"pipeline": [{"$group": {"_id": "count", "count": {"$sum" : 1}}}]}
+{ "_id" : "count", "count" : 15 }
+
