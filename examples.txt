@@ -1,0 +1,26 @@
+# Enable mongo mode with M-x mongo-mode
+# Perform M-x mongo-login to get started. It will prompt for a
+# URL. Hit enter for default mongodb://localhost:27017 or enter a
+# conneciton string.
+
+# Then M-x mongo-ping to check the connection. The result of the ping
+#  operation will show up in the minibuffer.
+
+# To perform a query, select the region with the query and do M-x
+# mongo-find-region. Try it on the next line. The results will be
+# inserted into the document at point.
+{}
+
+# Another sample query.
+{"bulk": "op"}
+
+# To insert a document, select the document and do M-x
+#  mongo-insert-region
+{"index": 1,
+ "test": "foo"
+}
+
+# You can also execute arbitrary aggregation pipelines
+{"pipeline": []}
+
+{"pipeline": [{"$group": {"_id": "count", "count": {"$sum" : 1}}}]}
