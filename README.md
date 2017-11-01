@@ -2,6 +2,11 @@
 
 > An elisp driver for Mongo, and Emacs minor mode for working with json documents, commands, and
 > queries.
+>
+
+## Warnings
+
+__This code is completely unsupported. Use at your own risk.__
 
 ## Depedencies:
 
