@@ -171,8 +171,19 @@
 
 (defun mongo-server-status ()
   (let* ((result-json (mongo-command-simple "{\"serverStatus\": 1}"))
-         (dbs (json-read-from-string result-json)))
-    dbs))
+         (stats (json-read-from-string result-json)))
+    stats))
+
+(defun mongo-collection-stats (db-name collection-name)
+  (let* ((command (format "{\"collStats\": \"%s\"}" collection-name))
+         (result-json (mongo-command-simple command db-name))
+         (stats (json-read-from-string result-json)))
+    stats))
+
+(defun mongo-list-collections (db-name)
+  (let* ((result-json (mongo-command-simple "{\"listCollections\": 1}" db-name))
+         (collections (json-read-from-string result-json)))
+    collections))
 
 (defun mongo-render-database (db)
   ;; TODO right justify the db sizes
@@ -180,13 +191,31 @@
   (let* ((name (alist-get 'name db))
          (size (alist-get 'sizeOnDisk db))
          (colored-name (propertize name 'face 'font-lock-function-name-face)))
-    (format "%d\t%s" size colored-name)))
+    (format "%d %s" size colored-name)))
 
 (defun render-server-status (stats connection-str)
   (let* ((process-type (alist-get 'process stats))
          (version (alist-get 'version stats))
          (text (string-join (list process-type version connection-str) " ")))
     (propertize text 'face 'font-lock-type-face)))
+
+(defun render-collection-line (name coll-stats)
+  ;; TODO: we should use stuff from the collection stats too
+  (propertize name 'face 'font-lock-function-name-face))
+
+(defun mongo-show-collections (db-name)
+  (let* ((response (mongo-list-collections db-name))
+         (collections (alist-get 'firstBatch (alist-get 'cursor (mongo-list-collections db-name))))
+         (collection-names (mapcar (lambda (c) (alist-get 'name c)) collections))
+         (collection-stats (mapcar (lambda (c) (mongo-collection-stats db-name c)) collection-names))
+         (lines (mapcar* 'render-collection-line collection-names collection-stats))
+         (collection-content (string-join lines "\n"))
+         (db-content (propertize db-name 'face 'font-lock-type-face))
+         (content (concat db-content "\n" collection-content))
+         (buf (get-buffer-create (format "mongo-%s" db-name))))
+    (switch-to-buffer buf)
+    (erase-buffer)
+    (insert content)))
 
 (defun mongo-show-dbs ()
   ;; TODO: the buffer we open should not be editable
@@ -265,6 +294,14 @@
   (mongo-get-collection "test" "test")
   ; is kill-buffer-hook the rights place to do this?
   (add-hook 'kill-buffer-hook 'mongo--quit))
+
+;; https://stackoverflow.com/a/9029082
+(defun mapcar* (f &rest xs)
+  "MAPCAR for multiple sequences"
+  (if (not (memq nil xs))
+    (cons (apply f (mapcar 'car xs))
+      (apply 'mapcar* f (mapcar 'cdr xs)))))
+
 
 ;; Binding nonsense
 
