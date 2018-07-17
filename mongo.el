@@ -217,6 +217,9 @@
     (erase-buffer)
     (insert content)))
 
+(defun jump-to-collections-view ()
+  (mongo-show-collections (thing-at-point 'word)))
+
 (defun mongo-show-dbs ()
   ;; TODO: the buffer we open should not be editable
   (interactive)
@@ -230,7 +233,8 @@
          (buf (get-buffer-create "mongo-dbs")))
     (switch-to-buffer buf)
     (erase-buffer)
-    (insert content)))
+    (insert content)
+    (local-set-key (kbd "RET") 'jump-to-collections-view)))
 
 ;;; Other mongoc functions to wrap
 ;;; mongoc_client_get_server_status()
