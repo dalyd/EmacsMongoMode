@@ -67,16 +67,17 @@
   (ffi-get-string (ffi-call blib "bson_as_relaxed_extended_json" [:pointer :pointer :pointer] bson nil)))
 
 ;;; simple command
-(defun mongo-command-simple (command)
+(defun mongo-command-simple (command &optional db-name)
   "Call command simple"
   (interactive "scommand:")
-  (let* ((command-bson (bson-new-from-json command))
-        (reply (ffi-call blib "bson_new" [:pointer]))
-        (retval
+  (let* ((db-name (or db-name "admin"))
+         (command-bson (bson-new-from-json command))
+         (reply (ffi-call blib "bson_new" [:pointer]))
+         (retval
            (ffi-call mlib "mongoc_client_command_simple"
                      [:sint8 :pointer :pointer :pointer :pointer :pointer :pointer]
                      client
-                     "admin"
+                     db-name
                      command-bson
                      nil
                      reply
