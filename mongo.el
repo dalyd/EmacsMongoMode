@@ -15,6 +15,7 @@
   "mongo-mode version")
 
 (require 'ffi)
+(require 'json)
 
 (ffi-ensure)
 
@@ -160,6 +161,34 @@
   (let* ((reply (bson-new))
          (retval (ffi-call mlib "mongoc_bulk_operation_execute" [:uint32 :pointer :pointer :pointer] bulkop reply nil)))
     (bson-as-json reply)))
+
+
+(defun mongo-list-databases ()
+  (let* ((result-json (mongo-command-simple "{\"listDatabases\": 1}"))
+         (dbs (json-read-from-string result-json)))
+    dbs))
+
+(defun mongo-render-database (db)
+  ;; TODO right justify the db sizes
+  "Generate a string representation of a db"
+  (let* ((name (alist-get 'name db))
+         (size (alist-get 'sizeOnDisk db))
+         (colored-name (propertize name 'face 'font-lock-function-name-face)))
+    (format "%d\t%s" size colored-name)))
+
+(defun mongo-show-dbs ()
+  ;; TODO: the buffer we open should not be editable
+  (interactive)
+  (let* ((response (mongo-list-databases))
+         (dbs (alist-get 'databases response))
+         (lines (mapcar 'mongo-render-database dbs))
+         (db-content (string-join lines "\n"))
+         (connection-display (propertize mongo--url 'face 'font-lock-type-face))
+         (content (concat connection-display "\n" db-content))
+         (buf (get-buffer-create "mongo-dbs")))
+    (switch-to-buffer buf)
+    (erase-buffer)
+    (insert content)))
 
 ;;; Other mongoc functions to wrap
 ;;; mongoc_client_get_server_status()
