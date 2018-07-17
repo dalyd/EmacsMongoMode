@@ -169,6 +169,11 @@
          (dbs (json-read-from-string result-json)))
     dbs))
 
+(defun mongo-server-status ()
+  (let* ((result-json (mongo-command-simple "{\"serverStatus\": 1}"))
+         (dbs (json-read-from-string result-json)))
+    dbs))
+
 (defun mongo-render-database (db)
   ;; TODO right justify the db sizes
   "Generate a string representation of a db"
@@ -177,14 +182,21 @@
          (colored-name (propertize name 'face 'font-lock-function-name-face)))
     (format "%d\t%s" size colored-name)))
 
+(defun render-server-status (stats connection-str)
+  (let* ((process-type (alist-get 'process stats))
+         (version (alist-get 'version stats))
+         (text (string-join (list process-type version connection-str) " ")))
+    (propertize text 'face 'font-lock-type-face)))
+
 (defun mongo-show-dbs ()
   ;; TODO: the buffer we open should not be editable
   (interactive)
   (let* ((response (mongo-list-databases))
+         (stats (mongo-server-status))
          (dbs (alist-get 'databases response))
          (lines (mapcar 'mongo-render-database dbs))
          (db-content (string-join lines "\n"))
-         (connection-display (propertize mongo--url 'face 'font-lock-type-face))
+         (connection-display (render-server-status stats mongo--url))
          (content (concat connection-display "\n" db-content))
          (buf (get-buffer-create "mongo-dbs")))
     (switch-to-buffer buf)
