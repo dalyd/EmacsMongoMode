@@ -185,6 +185,13 @@
          (collections (json-read-from-string result-json)))
     collections))
 
+(defun mongo-single-document (db-name coll-name)
+  (let* ((command (format "{\"find\": \"%s\", \"limit\": 1}" coll-name))
+         (result-json (mongo-command-simple command db-name))
+         (result (json-read-from-string result-json))
+         (docs (alist-get 'firstBatch (alist-get 'cursor result))))
+    (aref docs 0)))
+
 (defun mongo-render-database (db)
   ;; TODO right justify the db sizes
   "Generate a string representation of a db"
@@ -203,6 +210,23 @@
   ;; TODO: we should use stuff from the collection stats too
   (propertize name 'face 'font-lock-function-name-face))
 
+(defun mongo-show-document (db-name coll-name)
+  "Open a buffer displaying a single document from the collection"
+  (let* ((doc (mongo-single-document db-name coll-name))
+         (content (json-encode doc))
+         (buf (get-buffer-create (format "mongo-%s-%s" db-name coll-name))))
+    (switch-to-buffer buf)
+    (erase-buffer)
+    (insert content)
+    (js-mode)
+    (json-pretty-print-buffer)
+    (beginning-of-buffer)))
+
+
+(defun jump-to-document-view ()
+  (interactive)
+  (mongo-show-document current-db-name (thing-at-point 'symbol)))
+
 (defun mongo-show-collections (db-name)
   (let* ((response (mongo-list-collections db-name))
          (collections (alist-get 'firstBatch (alist-get 'cursor (mongo-list-collections db-name))))
@@ -215,11 +239,14 @@
          (buf (get-buffer-create (format "mongo-%s" db-name))))
     (switch-to-buffer buf)
     (erase-buffer)
-    (insert content)))
+    (insert content)
+    ;; TODO: is a global the best way of doing this?
+    (setq current-db-name db-name)
+    (local-set-key (kbd "RET") 'jump-to-document-view)))
 
 (defun jump-to-collections-view ()
   (interactive)
-  (mongo-show-collections (thing-at-point 'word)))
+  (mongo-show-collections (thing-at-point 'symbol)))
 
 (defun mongo-show-dbs ()
   ;; TODO: the buffer we open should not be editable
