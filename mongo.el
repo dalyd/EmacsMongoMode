@@ -15,6 +15,7 @@
   "mongo-mode version")
 
 (require 'ffi)
+(require 'json)
 
 (ffi-ensure)
 
@@ -66,16 +67,17 @@
   (ffi-get-string (ffi-call blib "bson_as_relaxed_extended_json" [:pointer :pointer :pointer] bson nil)))
 
 ;;; simple command
-(defun mongo-command-simple (command)
+(defun mongo-command-simple (command &optional db-name)
   "Call command simple"
   (interactive "scommand:")
-  (let* ((command-bson (bson-new-from-json command))
-        (reply (ffi-call blib "bson_new" [:pointer]))
-        (retval
+  (let* ((db-name (or db-name "admin"))
+         (command-bson (bson-new-from-json command))
+         (reply (ffi-call blib "bson_new" [:pointer]))
+         (retval
            (ffi-call mlib "mongoc_client_command_simple"
                      [:sint8 :pointer :pointer :pointer :pointer :pointer :pointer]
                      client
-                     "admin"
+                     db-name
                      command-bson
                      nil
                      reply
@@ -161,6 +163,80 @@
          (retval (ffi-call mlib "mongoc_bulk_operation_execute" [:uint32 :pointer :pointer :pointer] bulkop reply nil)))
     (bson-as-json reply)))
 
+
+(defun mongo-list-databases ()
+  (let* ((result-json (mongo-command-simple "{\"listDatabases\": 1}"))
+         (dbs (json-read-from-string result-json)))
+    dbs))
+
+(defun mongo-server-status ()
+  (let* ((result-json (mongo-command-simple "{\"serverStatus\": 1}"))
+         (stats (json-read-from-string result-json)))
+    stats))
+
+(defun mongo-collection-stats (db-name collection-name)
+  (let* ((command (format "{\"collStats\": \"%s\"}" collection-name))
+         (result-json (mongo-command-simple command db-name))
+         (stats (json-read-from-string result-json)))
+    stats))
+
+(defun mongo-list-collections (db-name)
+  (let* ((result-json (mongo-command-simple "{\"listCollections\": 1}" db-name))
+         (collections (json-read-from-string result-json)))
+    collections))
+
+(defun mongo-render-database (db)
+  ;; TODO right justify the db sizes
+  "Generate a string representation of a db"
+  (let* ((name (alist-get 'name db))
+         (size (alist-get 'sizeOnDisk db))
+         (colored-name (propertize name 'face 'font-lock-function-name-face)))
+    (format "%d %s" size colored-name)))
+
+(defun render-server-status (stats connection-str)
+  (let* ((process-type (alist-get 'process stats))
+         (version (alist-get 'version stats))
+         (text (string-join (list process-type version connection-str) " ")))
+    (propertize text 'face 'font-lock-type-face)))
+
+(defun render-collection-line (name coll-stats)
+  ;; TODO: we should use stuff from the collection stats too
+  (propertize name 'face 'font-lock-function-name-face))
+
+(defun mongo-show-collections (db-name)
+  (let* ((response (mongo-list-collections db-name))
+         (collections (alist-get 'firstBatch (alist-get 'cursor (mongo-list-collections db-name))))
+         (collection-names (mapcar (lambda (c) (alist-get 'name c)) collections))
+         (collection-stats (mapcar (lambda (c) (mongo-collection-stats db-name c)) collection-names))
+         (lines (mapcar* 'render-collection-line collection-names collection-stats))
+         (collection-content (string-join lines "\n"))
+         (db-content (propertize db-name 'face 'font-lock-type-face))
+         (content (concat db-content "\n" collection-content))
+         (buf (get-buffer-create (format "mongo-%s" db-name))))
+    (switch-to-buffer buf)
+    (erase-buffer)
+    (insert content)))
+
+(defun jump-to-collections-view ()
+  (interactive)
+  (mongo-show-collections (thing-at-point 'word)))
+
+(defun mongo-show-dbs ()
+  ;; TODO: the buffer we open should not be editable
+  (interactive)
+  (let* ((response (mongo-list-databases))
+         (stats (mongo-server-status))
+         (dbs (alist-get 'databases response))
+         (lines (mapcar 'mongo-render-database dbs))
+         (db-content (string-join lines "\n"))
+         (connection-display (render-server-status stats mongo--url))
+         (content (concat connection-display "\n" db-content))
+         (buf (get-buffer-create "mongo-dbs")))
+    (switch-to-buffer buf)
+    (erase-buffer)
+    (insert content)
+    (local-set-key (kbd "RET") 'jump-to-collections-view)))
+
 ;;; Other mongoc functions to wrap
 ;;; mongoc_client_get_server_status()
 ;;; mongoc_collection_find_and_modify_with_opts()
@@ -223,6 +299,14 @@
   (mongo-get-collection "test" "test")
   ; is kill-buffer-hook the rights place to do this?
   (add-hook 'kill-buffer-hook 'mongo--quit))
+
+;; https://stackoverflow.com/a/9029082
+(defun mapcar* (f &rest xs)
+  "MAPCAR for multiple sequences"
+  (if (not (memq nil xs))
+    (cons (apply f (mapcar 'car xs))
+      (apply 'mapcar* f (mapcar 'cdr xs)))))
+
 
 ;; Binding nonsense
 
