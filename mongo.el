@@ -21,24 +21,15 @@
 ;;; Initialize the connection
 (mongo-init)
 
-;;; Functions
-;;; Setup Client connection
-;;; TODO: don't make these interactive
-;;; TODO: prefix these with mongo-- to make them private
-
 ;;; mongoc_collection_aggregate
 (defun mongo-collection-aggregate (pipeline &optional opts query-flags)
   "Execute an aggregation pipeline"
   (interactive "spipeline:\nsopts:")
   (or opts (setq opts "{}"))
   (or query-flags (setq query-flags 0)) ; set default value
-  (let* ((cursor (ffi-call mlib "mongoc_collection_aggregate" [:pointer :pointer :sint16 :pointer :pointer :pointer]
-                           collection
-                           query-flags
-                           pipeline-bson
-                           opts
-                           nil)))
-    (mongo-exhaust-cursor cursor)))
+  (let* ((command (format "{\"aggregate\": \"%s\", \"pipeline\": %s, \"cursor\": {}}" collection-name pipeline))
+         (output (json-read-from-string(mongo-command-with-opts command opts))))
+    output))
 
 
 (defun mongo-list-databases ()
@@ -158,7 +149,7 @@
 (defun mongo-aggregate-region (start-point end-point)
   (interactive "r")
   (let* ((region-contents (buffer-substring start-point end-point))
-         (agg-output (mongo-collection-aggregate region-contents)))
+         (agg-output (json-encode (alist-get 'firstBatch (alist-get 'cursor (mongo-collection-aggregate region-contents))))))
     (insert "\n" agg-output)))
 
 (defun mongo-insert-region (start-point end-point)

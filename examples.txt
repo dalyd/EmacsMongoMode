@@ -22,6 +22,6 @@
 }
 
 # You can also execute arbitrary aggregation pipelines
-{"pipeline": []}
+[]
 
-{"pipeline": [{"$group": {"_id": "count", "count": {"$sum" : 1}}}]}
+[{"$group": {"_id": "count", "count": {"$sum" : 1}}}]
