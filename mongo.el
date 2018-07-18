@@ -225,7 +225,7 @@
 
 (defun jump-to-document-view ()
   (interactive)
-  (mongo-show-document current-db-name (thing-at-point 'word)))
+  (mongo-show-document current-db-name (thing-at-point 'symbol)))
 
 (defun mongo-show-collections (db-name)
   (let* ((response (mongo-list-collections db-name))
@@ -246,7 +246,7 @@
 
 (defun jump-to-collections-view ()
   (interactive)
-  (mongo-show-collections (thing-at-point 'word)))
+  (mongo-show-collections (thing-at-point 'symbol)))
 
 (defun mongo-show-dbs ()
   ;; TODO: the buffer we open should not be editable
