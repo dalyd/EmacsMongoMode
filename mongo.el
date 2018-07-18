@@ -33,8 +33,8 @@
 
 
 (defun mongo-list-databases ()
-  (setq database-name "admin")
-  (let* ((result-json (mongo-simple-command "{\"listDatabases\": 1}"))
+  (let* ((database-name "admin")
+         (result-json (mongo-simple-command "{\"listDatabases\": 1}"))
          (dbs (json-read-from-string result-json)))
     dbs))
 
@@ -44,8 +44,8 @@
     stats))
 
 (defun mongo-collection-stats (db-name collection-name)
-  (setq database-name db-name)
-  (let* ((command (format "{\"collStats\": \"%s\"}" collection-name))
+  (let* ((database-name db-name)
+         (command (format "{\"collStats\": \"%s\"}" collection-name))
          (result-json (mongo-simple-command command))
          (stats (json-read-from-string result-json)))
     stats))
@@ -57,8 +57,9 @@
     collections))
 
 (defun mongo-single-document (db-name coll-name)
-  (let* ((command (format "{\"find\": \"%s\", \"limit\": 1}" coll-name))
-         (result-json (mongo-command-simple command db-name))
+   (let* ((database-name db-name)
+          (command (format "{\"find\": \"%s\", \"limit\": 1}" coll-name))
+         (result-json (mongo-simple-command command))
          (result (json-read-from-string result-json))
          (docs (alist-get 'firstBatch (alist-get 'cursor result))))
     (aref docs 0)))
