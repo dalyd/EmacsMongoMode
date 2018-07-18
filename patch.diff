@@ -1,0 +1,396 @@
+diff --git a/configure.ac b/configure.ac
+index 256b954..7c49cd8 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -1609,6 +1609,8 @@ AC_DEFUN
+       m4_default([$3], [HAVE_$1=yes])],
+      [m4_default([$4], [HAVE_$1=no])])])
+ 
++EMACS_CHECK_MODULES([MONGOC], ["libmongoc-ssl-1.0"])
++
+ HAVE_SOUND=no
+ if test "${with_sound}" != "no"; then
+   # Sound support for GNU/Linux, the free BSDs, MinGW, and Cygwin.
+diff --git a/lisp/cus-start.el b/lisp/cus-start.el
+index 451e7f7..3441cd0 100644
+--- a/lisp/cus-start.el
++++ b/lisp/cus-start.el
+@@ -411,6 +411,10 @@ minibuffer-prompt-properties--setter
+ 	     (read-buffer-function minibuffer
+ 				   (choice (const nil)
+ 					   function))
++             ;; mongo.c
++             (database-name mongo string)
++             (collection-name mongo string)
++             (mongo-uri mongo string)
+ 	     ;; msdos.c
+ 	     (dos-unsupported-char-glyph display integer)
+ 	     ;; nsterm.m
+diff --git a/src/Makefile.in b/src/Makefile.in
+index 15ca166..d1b5d1e 100644
+--- a/src/Makefile.in
++++ b/src/Makefile.in
+@@ -120,6 +120,10 @@ LIBS_SYSTEM=
+ ## -lm, or empty.
+ LIB_MATH=@LIB_MATH@
+ 
++## MONGO C Driver
++MONGOC_LIBS=@MONGOC_LIBS@
++MONGOC_CFLAGS=@MONGOC_CFLAGS@
++
+ ## -lpthread, or empty.
+ LIB_PTHREAD=@LIB_PTHREAD@
+ 
+@@ -363,7 +367,7 @@ EMACS_CFLAGS=
+   $(WEBKIT_CFLAGS) \
+   $(SETTINGS_CFLAGS) $(FREETYPE_CFLAGS) $(FONTCONFIG_CFLAGS) \
+   $(LIBOTF_CFLAGS) $(M17N_FLT_CFLAGS) $(DEPFLAGS) \
+-  $(LIBSYSTEMD_CFLAGS) \
++  $(LIBSYSTEMD_CFLAGS)  $(MONGOC_CFLAGS) \
+   $(LIBGNUTLS_CFLAGS) $(NOTIFY_CFLAGS) $(CAIRO_CFLAGS) \
+   $(WERROR_CFLAGS)
+ ALL_CFLAGS = $(EMACS_CFLAGS) $(WARN_CFLAGS) $(CFLAGS)
+@@ -394,7 +398,7 @@ base_obj =
+ 	doprnt.o intervals.o textprop.o composite.o xml.o lcms.o $(NOTIFY_OBJ) \
+ 	$(XWIDGETS_OBJ) \
+ 	profiler.o decompress.o \
+-	thread.o systhread.o \
++	thread.o systhread.o mongo.o\
+ 	$(if $(HYBRID_MALLOC),sheap.o) \
+ 	$(MSDOS_OBJ) $(MSDOS_X_OBJ) $(NS_OBJ) $(CYGWIN_OBJ) $(FONT_OBJ) \
+ 	$(W32_OBJ) $(WINDOW_SYSTEM_OBJ) $(XGSELOBJ)
+@@ -493,7 +497,7 @@ LIBES =
+    $(LIBS_TERMCAP) $(GETLOADAVG_LIBS) $(SETTINGS_LIBS) $(LIBSELINUX_LIBS) \
+    $(FREETYPE_LIBS) $(FONTCONFIG_LIBS) $(LIBOTF_LIBS) $(M17N_FLT_LIBS) \
+    $(LIBGNUTLS_LIBS) $(LIB_PTHREAD) $(GETADDRINFO_A_LIBS) $(LIBLCMS2) \
+-   $(NOTIFY_LIBS) $(LIB_MATH) $(LIBZ) $(LIBMODULES) $(LIBSYSTEMD_LIBS)
++   $(NOTIFY_LIBS) $(LIB_MATH) $(LIBZ) $(LIBMODULES) $(LIBSYSTEMD_LIBS) $(MONGOC_LIBS)
+ 
+ ## FORCE it so that admin/unidata can decide whether these files
+ ## are up-to-date.  Although since charprop depends on bootstrap-emacs,
+diff --git a/src/emacs.c b/src/emacs.c
+index 017c623..d4c5a03 100644
+--- a/src/emacs.c
++++ b/src/emacs.c
+@@ -1474,6 +1474,7 @@ Using an Emacs configured with --with-x-toolkit=lucid does not have this problem
+       syms_of_lread ();
+       syms_of_print ();
+       syms_of_eval ();
++      syms_of_mongo ();
+       syms_of_floatfns ();
+ 
+       syms_of_buffer ();
+diff --git a/src/eval.c b/src/eval.c
+index ca1eb84..be62900 100644
+--- a/src/eval.c
++++ b/src/eval.c
+@@ -23,6 +23,7 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
+ #include <limits.h>
+ #include <stdio.h>
+ #include <stdlib.h>
++#include <mongoc.h>
+ #include "lisp.h"
+ #include "blockinput.h"
+ #include "commands.h"
+diff --git a/src/mongo.c b/src/mongo.c
+new file mode 100644
+index 0000000..85ee07e
+--- /dev/null
++++ b/src/mongo.c
+@@ -0,0 +1,296 @@
++/* Evaluator for GNU Emacs Lisp interpreter.
++
++Copyright (C) 1985-1987, 1993-1995, 1999-2018 Free Software Foundation,
++Inc.
++
++This file is part of GNU Emacs.
++
++GNU Emacs is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or (at
++your option) any later version.
++
++GNU Emacs is distributed in the hope that it will be useful,
++but WITHOUT ANY WARRANTY; without even the implied warranty of
++MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++GNU General Public License for more details.
++
++You should have received a copy of the GNU General Public License
++along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
++
++
++#include <config.h>
++#include <limits.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <mongoc.h>
++#include "lisp.h"
++#include "blockinput.h"
++#include "commands.h"
++#include "keyboard.h"
++#include "dispextern.h"
++#include "buffer.h"
++
++DEFUN ("mongo-init", Fmongo_init, Smongo_init, 0, 0, "",
++       doc: /* Entry into the c driver*/)
++         (void)
++{
++    mongoc_init();
++    return Qnil;
++}
++
++mongoc_client_t* client_from_uri(){
++    mongoc_uri_t *uri;
++    mongoc_client_t *client;
++    bson_error_t error;
++    CHECK_STRING(Vmongo_uri);
++    uri = mongoc_uri_new_with_error (SDATA(Vmongo_uri), &error);
++    client = mongoc_client_new_from_uri(uri);
++    mongoc_uri_destroy (uri);
++    return client;
++}
++
++DEFUN ("mongo-simple-command", Fmongo_simple_command, Smongo_simple_command, 1, 1, "sCommand JSON: ",
++       doc: /* Wrapper around mongoc_simple_command */)
++     (Lisp_Object command)
++{
++    Lisp_Object val = Qnil;
++
++    bson_error_t error;
++    mongoc_client_t *client;
++    bson_t *command_bson, reply;
++    char *str;
++    bool retval;
++
++    CHECK_STRING(command);
++    CHECK_STRING(Vdatabase_name);
++    client = client_from_uri();
++    Fprint(command, Qnil);
++    command_bson = bson_new_from_json (SDATA(command), -1, NULL);
++    retval = mongoc_client_command_simple (
++                                          client, SDATA(Vdatabase_name), command_bson, NULL, &reply, &error);
++
++   if (!retval) {
++      fprintf (stderr, "%s\n", error.message);
++      Fprint(build_string(error.message), Qnil);
++      return val;
++   }
++
++   str = bson_as_json (&reply, NULL);
++   printf ("%s\n", str);
++   val = build_string(str);
++   bson_destroy (&reply);
++   bson_destroy (command_bson);
++   bson_free (str);
++
++   mongoc_client_destroy (client);
++   mongoc_cleanup ();
++   return val;
++}
++
++DEFUN ("mongo-command-with-opts", Fmongo_command_with_opts, Smongo_command_with_opts, 2, 2, "(list (read-string \"Command JSON: \") (read-string \"Opts JSON:\"))",
++       doc: /* Wrapper around mongoc_client_command_with_opts */)
++     (Lisp_Object command, Lisp_Object opts)
++{
++    Lisp_Object val = Qnil;
++
++    mongoc_uri_t *uri;
++    bson_error_t error;
++    mongoc_client_t *client;
++    bson_t *command_bson, *opts_bson, reply;
++    char *str;
++    bool retval;
++
++    client = client_from_uri();
++    CHECK_STRING(command);
++    CHECK_STRING(opts);
++    CHECK_STRING(Vdatabase_name);
++    Fprint(command, Qnil);
++    Fprint(opts, Qnil);
++    command_bson = bson_new_from_json (SDATA(command), -1, NULL);
++    opts_bson = bson_new_from_json (SDATA(opts), -1, NULL);
++    retval = mongoc_client_command_with_opts (
++                                              client, SDATA(Vdatabase_name), command_bson, NULL, opts_bson, &reply, &error);
++
++    if (!retval) {
++        fprintf (stderr, "%s\n", error.message);
++      Fprint(build_string(error.message), Qnil);
++      return val;
++    }
++
++    str = bson_as_json (&reply, NULL);
++    printf ("%s\n", str);
++    val = build_string(str);
++    bson_destroy (&reply);
++    bson_destroy (command_bson);
++    bson_destroy (opts_bson);
++    bson_free (str);
++
++    mongoc_client_destroy (client);
++    mongoc_cleanup ();
++    return val;
++}
++
++DEFUN ("mongo-insert-one", Fmongo_insert_one, Smongo_insert_one, 2, 2, "(list (read-string \"Document to insert: \") (read-string \"Opts JSON: \"))",
++       doc: /* Wrapper around mongoc_client_command_with_opts */)
++     (Lisp_Object doc, Lisp_Object opts)
++{
++    Lisp_Object val = build_string("");
++
++    mongoc_uri_t *uri;
++    bson_error_t error;
++    mongoc_client_t *client;
++    mongoc_collection_t *collection;
++    bson_t *doc_bson, *opts_bson, reply;
++    char *str;
++    bool retval;
++
++    client = client_from_uri();
++    CHECK_STRING(doc);
++    CHECK_STRING(opts);
++    CHECK_STRING(Vdatabase_name);
++    CHECK_STRING(Vcollection_name);
++    Fprint(doc, Qnil);
++    Fprint(opts, Qnil);
++    doc_bson = bson_new_from_json (SDATA(doc), -1, NULL);
++    opts_bson = bson_new_from_json (SDATA(opts), -1, NULL);
++    collection = mongoc_client_get_collection(client, SDATA(Vdatabase_name), SDATA(Vcollection_name));
++    retval = mongoc_collection_insert_one (collection, doc_bson, opts_bson, &reply, &error);
++
++    if (!retval) {
++        fprintf (stderr, "%s\n", error.message);
++      Fprint(build_string(error.message), Qnil);
++      return val;
++    }
++
++    str = bson_as_json (&reply, NULL);
++    printf ("%s\n", str);
++    val = build_string(str);
++    bson_destroy (&reply);
++    bson_destroy (doc_bson);
++    bson_destroy (opts_bson);
++    bson_free (str);
++
++    mongoc_client_destroy (client);
++    mongoc_cleanup ();
++    return val;
++}
++
++DEFUN ("mongo-find", Fmongo_find, Smongo_find, 2, 2, "(list (read-string \"Find filter: \") (read-string \"Opts JSON: \"))",
++       doc: /* Mongo find command with options */)
++     (Lisp_Object filter, Lisp_Object opts)
++{
++    Lisp_Object val = Qnil;
++
++    mongoc_client_t *client;
++    mongoc_collection_t *collection;
++    bson_t *filter_bson, *opts_bson;
++    const bson_t *doc;
++    char *str;
++    mongoc_cursor_t * cursor;
++    
++    client = client_from_uri();
++    CHECK_STRING(filter);
++    CHECK_STRING(opts);
++    CHECK_STRING(Vdatabase_name);
++    CHECK_STRING(Vcollection_name);
++    Fprint(filter, Qnil);
++    Fprint(opts, Qnil);
++    filter_bson = bson_new_from_json (SDATA(filter), -1, NULL);
++    opts_bson = bson_new_from_json (SDATA(opts), -1, NULL);
++    collection = mongoc_client_get_collection(client, SDATA(Vdatabase_name), SDATA(Vcollection_name));
++    cursor = mongoc_collection_find_with_opts(collection, filter_bson, opts_bson, NULL);
++    while (mongoc_cursor_next(cursor, &doc)) {
++        str = bson_as_canonical_extended_json(doc, NULL);
++        // Copy the data into val
++        Lisp_Object string = build_string(str);
++        val = concat2(val, string);
++        bson_free(str);
++    }
++    mongoc_cursor_destroy (cursor);
++    bson_destroy (filter_bson);
++    bson_destroy (opts_bson);
++    mongoc_client_destroy (client);
++    mongoc_cleanup ();
++    return val;
++}
++
++DEFUN ("mongo-demo", Fmongo_demo, Smongo_demo, 0, 1, "",
++       doc: /* Login to the connection*/)
++         (Lisp_Object args)
++{
++    Lisp_Object val = Qnil;
++
++    mongoc_uri_t *uri;
++    bson_error_t error;
++    mongoc_client_t *client;
++    mongoc_database_t *database;
++    mongoc_collection_t *collection;
++    bson_t *command, reply, *insert;
++    char *str;
++    bool retval;
++
++    char * uristring;
++    CHECK_STRING(Vmongo_uri);
++    CHECK_STRING(Vdatabase_name);
++    printf("After init\n");
++    Fprint(Vmongo_uri, Qnil);
++    uristring = SDATA(Vmongo_uri);
++    printf("%s\n", uristring);
++    uri = mongoc_uri_new_with_error (uristring, &error);
++    client = mongoc_client_new_from_uri(uri);
++    database = mongoc_client_get_database (client, SDATA(Vdatabase_name));
++    collection = mongoc_client_get_collection(client, SDATA(Vdatabase_name), SDATA(Vcollection_name));
++
++    printf("Have client, database, and collection\n");
++    command = BCON_NEW ("ping", BCON_INT32 (1));
++
++   retval = mongoc_client_command_simple (
++      client, "admin", command, NULL, &reply, &error);
++
++   if (!retval) {
++      fprintf (stderr, "%s\n", error.message);
++      return val;
++   }
++
++   str = bson_as_json (&reply, NULL);
++   printf ("%s\n", str);
++
++   insert = BCON_NEW ("hello", BCON_UTF8 ("world"));
++
++   if (!mongoc_collection_insert_one (collection, insert, NULL, NULL, &error)) {
++      fprintf (stderr, "%s\n", error.message);
++   }
++
++   bson_destroy (insert);
++   bson_destroy (&reply);
++   bson_destroy (command);
++   bson_free (str);
++
++   mongoc_collection_destroy (collection);
++   mongoc_database_destroy (database);
++   mongoc_uri_destroy (uri);
++   mongoc_client_destroy (client);
++   mongoc_cleanup ();
++   return val;
++}
++
++void
++syms_of_mongo(void)
++{
++    DEFVAR_LISP ("database-name", Vdatabase_name,
++                 doc: /* The database name used by the driver */);
++    Vdatabase_name = build_string("test");
++    DEFVAR_LISP ("collection-name", Vcollection_name,
++                 doc: /* The collection name used by the driver */);
++    Vcollection_name = build_string("test");
++    DEFVAR_LISP ("mongo-uri", Vmongo_uri,
++                 doc: /* The URI to use with mongo */);
++    Vmongo_uri = build_string("mongodb://localhost:27017");
++    defsubr (&Smongo_init);
++    defsubr (&Smongo_demo);
++    defsubr (&Smongo_simple_command);
++    defsubr (&Smongo_command_with_opts);
++    defsubr (&Smongo_insert_one);
++    defsubr (&Smongo_find);
++}

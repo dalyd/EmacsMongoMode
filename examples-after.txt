@@ -43,7 +43,7 @@
 }
 
 # You can also execute arbitrary aggregation pipelines
-{"pipeline": []}
+[]
 { "_id" : { "$oid" : "59f9f5f6f9b2131a8d0fbef6" }, "testing" : true }
 { "_id" : { "$oid" : "59f9f614f9b2131a8d0fbef7" }, "bulk" : "op" }
 { "_id" : { "$oid" : "59f9f615f9b2131a8d0fbef8" }, "bulk" : "op" }
@@ -61,6 +61,6 @@
 { "_id" : { "$oid" : "59fa1632f9b21336b81a53d9" }, "index" : 1, "test" : "foo" }
 
 
-{"pipeline": [{"$group": {"_id": "count", "count": {"$sum" : 1}}}]}
+[{"$group": {"_id": "count", "count": {"$sum" : 1}}}]
 { "_id" : "count", "count" : 15 }
 
