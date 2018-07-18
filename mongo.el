@@ -218,6 +218,7 @@
     (insert content)))
 
 (defun jump-to-collections-view ()
+  (interactive)
   (mongo-show-collections (thing-at-point 'word)))
 
 (defun mongo-show-dbs ()
