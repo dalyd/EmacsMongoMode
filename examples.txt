@@ -14,6 +14,7 @@
 # Another sample query.
 {"bulk": "op"}
 
+
 # To insert a document, select the document and do M-x
 #  mongo-insert-region
 {"index": 1,
